@@ -1,0 +1,44 @@
+# Standalone Neo4j graph DB — database container ONLY.
+#
+# This is its own compose project (`neo4j-db`), with its own container, its
+# own named volume and its own host ports, so it runs independently of the
+# original `memchat` stack and can be shared with other clients (e.g. the
+# memgraph backend running on the host via `localhost:17989`).
+#
+#   docker compose up -d          start the DB
+#   docker compose ps             status / health
+#   docker compose logs -f        follow logs
+#   docker compose down           stop (keeps data)
+#   docker compose down -v        stop AND WIPE the graph
+#
+# Browser UI: http://localhost:17898   (login neo4j / neo4j-db-password)
+# Bolt:       bolt://localhost:17989
+name: neo4j-db
+
+services:
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: neo4j-db
+    restart: unless-stopped
+    ports:
+      - "17898:7474"  # browser UI host port (7474/17474 taken elsewhere)
+      - "17989:7687"  # bolt host port (7687/17687 taken elsewhere)
+    environment:
+      NEO4J_AUTH: neo4j/neo4j-db-password
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+    volumes:
+      - neo4j_data:/data        # graph store (survives `docker compose down`)
+      - neo4j_logs:/logs        # neo4j logs
+      - neo4j_plugins:/plugins  # cached APOC jar (avoids re-download per recreate)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:
